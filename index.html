@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Most Stacked Skips</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --neon-blue: #00f2ff;
+            --light-blue: #7dd3fc;
+            --dark-navy: #020617;
+        }
+
+        body {
+            background-color: var(--dark-navy);
+            color: #e2e8f0;
+            overflow: hidden;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .grid-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 242, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 242, 255, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: -1;
+        }
+
+        .cyber-panel {
+            background: rgba(10, 25, 47, 0.9);
+            border: 2px solid rgba(0, 242, 255, 0.3);
+            position: relative;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .scroll-frame {
+            overflow-y: auto;
+            flex-grow: 1;
+            padding-right: 10px;
+            height: 100%;
+        }
+
+        #stacked-list::-webkit-scrollbar,
+        #alltime-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #stacked-list::-webkit-scrollbar-track,
+        #alltime-list::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        #stacked-list::-webkit-scrollbar-thumb,
+        #alltime-list::-webkit-scrollbar-thumb {
+            background: var(--neon-blue);
+            box-shadow: 0 0 10px var(--neon-blue);
+        }
+
+        .user-row {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.2s ease;
+        }
+
+        .user-row:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .rank-1 { color: #ffd700; text-shadow: 0 0 10px #ffd700; font-weight: bold; }
+        .rank-2 { color: #c0c0c0; text-shadow: 0 0 10px #c0c0c0; font-weight: bold; }
+        .rank-3 { color: #cd7f32; text-shadow: 0 0 10px #cd7f32; font-weight: bold; }
+
+        .truncated-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+            width: 100%;
+            text-align: center;
+        }
+
+        .scanline {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, transparent 50%, rgba(0, 0, 0, 0.2) 51%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .cyber-title {
+            color: var(--light-blue);
+            text-shadow: 0 0 15px rgba(125, 211, 252, 0.5);
+            text-transform: uppercase;
+            white-space: nowrap;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .refresh-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 242, 255, 0.1);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: var(--neon-blue);
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-8">
+    <div class="grid-bg"></div>
+    <div class="scanline"></div>
+    
+    <div class="refresh-indicator" id="refreshIndicator">
+        Refreshing in: <span id="countdown">60</span>s
+    </div>
+
+    <header class="text-center mb-10">
+        <h1 class="text-4xl md:text-5xl font-black cyber-title tracking-tighter">
+            Most Stacked Skips
+        </h1>
+        <p class="text-white text-sm mt-2 opacity-80">
+            (Excluding Warp & Transcendent Potions)
+        </p>
+    </header>
+
+    <main class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-7xl">
+        
+        <div class="cyber-panel p-6">
+            <div class="mb-6">
+                <h2 class="text-xl font-bold text-white uppercase truncated-title" title="Current Most Stacked Skips">
+                    Current Most Stacked Skips
+                </h2>
+            </div>
+            
+            <div id="stacked-list" class="scroll-frame"></div>
+        </div>
+
+        <div class="cyber-panel p-6">
+            <div class="mb-6">
+                <h2 class="text-xl font-bold text-white uppercase truncated-title" title="Highest skips of all time">
+                    Highest skips of all time
+                </h2>
+            </div>
+
+            <div id="alltime-list" class="scroll-frame"></div>
+        </div>
+
+    </main>
+
+    <script>
+        const stackedList = document.getElementById('stacked-list');
+        const allTimeList = document.getElementById('alltime-list');
+        const refreshIndicator = document.getElementById('refreshIndicator');
+        const countdownElement = document.getElementById('countdown');
+
+        let leaderboardData = {
+            current: [],
+            alltime: []
+        };
+
+        const createRow = (rank, username, val, isBlue) => {
+            const row = document.createElement('div');
+            row.className = 'user-row p-3 flex justify-between items-center';
+            if (rank <= 3) row.classList.add('bg-cyan-500/5');
+            row.innerHTML = `
+                <span class="${rank <= 3 ? 'rank-' + rank : 'text-slate-400'}">#${rank} ${username}</span>
+                <span class="${rank <= 3 ? 'text-cyan-400' : 'text-slate-500'} font-mono">${val}</span>
+            `;
+            return row;
+        };
+
+        function updateLeaderboardDisplay() {
+            stackedList.innerHTML = '';
+            allTimeList.innerHTML = '';
+            
+            const sortedCurrent = [...leaderboardData.current].sort((a, b) => b.value - a.value);
+            const sortedAllTime = [...leaderboardData.alltime].sort((a, b) => b.value - a.value);
+            
+            sortedCurrent.forEach((user, index) => {
+                const rank = index + 1;
+                stackedList.appendChild(createRow(rank, user.username, user.value.toLocaleString(), true));
+            });
+            
+            sortedAllTime.forEach((user, index) => {
+                const rank = index + 1;
+                const percentage = user.value.toFixed(1) + '%';
+                allTimeList.appendChild(createRow(rank, user.username, percentage, true));
+            });
+        }
+
+        async function fetchLeaderboardData() {
+            try {
+                // For GitHub Pages, we'll use a different approach
+                // This will be handled by the Discord bot
+                console.log('Fetching data...');
+                
+                // For now, show placeholder data
+                leaderboardData = {
+                    current: [
+                        { username: "tlq_h", value: 1500 },
+                        { username: "pro_gamer", value: 1200 }
+                    ],
+                    alltime: [
+                        { username: "tlq_h", value: 95.5 },
+                        { username: "legendary", value: 92.3 }
+                    ]
+                };
+                
+                updateLeaderboardDisplay();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        let countdown = 60;
+        let refreshInterval;
+
+        function startRefreshCountdown() {
+            clearInterval(refreshInterval);
+            countdown = 60;
+            
+            refreshInterval = setInterval(() => {
+                countdown--;
+                countdownElement.textContent = countdown;
+                
+                if (countdown <= 0) {
+                    fetchLeaderboardData();
+                    countdown = 60;
+                    countdownElement.textContent = countdown;
+                }
+            }, 1000);
+        }
+
+        fetchLeaderboardData();
+        startRefreshCountdown();
+
+        refreshIndicator.addEventListener('click', () => {
+            fetchLeaderboardData();
+            countdown = 60;
+            countdownElement.textContent = countdown;
+        });
+    </script>
+</body>
+</html>
